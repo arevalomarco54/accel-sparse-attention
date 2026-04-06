@@ -1,0 +1,235 @@
+# arch.yaml -- LongSight (Quinn et al., MICRO '25)
+
+architecture:
+  version: 0.4
+  nodes:
+  - !Component
+    name: System
+    class: System
+    attributes:
+      technology: 7nm
+
+    subtree:
+    - !Component
+      name: GPU_Tier
+      class: GPU_Tier
+      attributes:
+        technology: 4nm
+
+      subtree:
+      - !Component
+        name: HBM
+        class: DRAM
+        attributes:
+          type: HBM3
+          width: 1024
+          depth: 85899345920   # 80 GB
+          bandwidth: 3350      # GB/s
+          datawidth: 16
+          technology: 4nm
+        local:
+        - name: HBM_Storage
+          class: DRAM
+          attributes:
+            width: 1024
+            depth: 85899345920
+
+      - !Component
+        name: SM_Core
+        class: compute_unit
+        attributes:
+          technology: 4nm
+          datawidth: 16
+          num_SMs: 132
+          flops: 989e12        # BF16 peak
+        local:
+        - name: SM_Compute
+          class: intmac
+          attributes:
+            datawidth: 16
+            num_instances: 132
+
+    # CXL link (PCIe 5.0 x16, CXL.mem Type-3)
+    - !Component
+      name: CXL_Interconnect
+      class: CXL_Link
+      attributes:
+        technology: 7nm
+        width: 512
+        bandwidth: 64          # GB/s bidir
+        latency_ns: 150
+        link_type: CXL_Type3
+      local:
+      - name: CXL_Network
+        class: Network
+        attributes:
+          width: 512
+          bandwidth: 64
+
+    # DReX CXL memory expander -- 512 GB LPDDR5X
+    - !Component
+      name: DReX
+      class: CXL_Memory_Expander
+      attributes:
+        technology: 7nm
+        total_capacity_GB: 512
+        num_packages: 8
+        num_channels_per_package: 8
+        num_banks_per_channel: 128
+        peak_power_W: 158.2
+
+      subtree:
+      - !Component
+        name: DCC
+        class: CXL_Controller
+        attributes:
+          technology: 7nm
+          queue_depth: 512
+          polling_register_bits: 512
+          response_buffer_count: 512
+
+      # 8 LPDDR5X packages, each with 1 NMA + 8 channels x 128 banks
+      - !Component
+        name: LPDDR5X_Package
+        class: LPDDR5X_Package
+        attributes:
+          technology: 7nm
+          instances: 8
+          capacity_GB: 64
+          peak_power_W: 18.7
+          num_channels: 8
+          num_banks_per_channel: 128
+
+        subtree:
+        # Near-Memory Accelerator -- 1 per package, 16nm
+        - !Component
+          name: NMA
+          class: Near_Memory_Accelerator
+          attributes:
+            technology: 16nm
+            area_mm2: 15.1
+            peak_power_W: 1.072
+            instances: 1
+
+          subtree:
+          - !Component
+            name: Query_SPM
+            class: SRAM
+            attributes:
+              width: 128
+              depth: 256         # holds head_dim=128 BF16 query
+              datawidth: 16
+              technology: 16nm
+            local:
+            - name: Query_SPM_Storage
+              class: SRAM
+              attributes:
+                width: 128
+                depth: 256
+
+          - !Component
+            name: Address_SPM
+            class: SRAM
+            attributes:
+              width: 32          # 32-bit key IDs
+              depth: 1024        # max top-k
+              datawidth: 32
+              technology: 16nm
+            local:
+            - name: Address_SPM_Storage
+              class: SRAM
+              attributes:
+                width: 32
+                depth: 1024
+
+          - !Component
+            name: NMA_MAC
+            class: NMA_MAC
+            attributes:
+              datawidth: 16      # BF16
+              head_dim: 128
+              technology: 16nm
+            local:
+            - name: NMA_MAC_Compute
+              class: NMA_MAC
+              attributes:
+                datawidth: 16
+                head_dim: 128
+
+          - !Component
+            name: Top_K_Unit
+            class: Top_K_Unit
+            attributes:
+              max_k: 1024
+              score_width: 32
+              technology: 16nm
+            local:
+            - name: Top_K_Sort
+              class: Top_K_Unit
+              attributes:
+                max_k: 1024
+                score_width: 32
+
+        # 8 channels per package
+        - !Component
+          name: Channel
+          class: LPDDR5X_Channel
+          attributes:
+            technology: 7nm
+            instances: 8
+            bandwidth_GBps: 17.06
+
+          subtree:
+          # 128 banks per channel
+          - !Component
+            name: Bank
+            class: LPDDR5X_Bank_Group
+            attributes:
+              technology: 7nm
+              instances: 128
+              bank_width: 128    # 128-bit internal bus
+
+            subtree:
+            - !Component
+              name: LPDDR5X_Bank
+              class: DRAM
+              attributes:
+                type: LPDDR5X
+                width: 128       # matches row buffer width
+                depth: 262144
+                datawidth: 16
+                technology: 7nm
+              local:
+              - name: Bank_Storage
+                class: DRAM
+                attributes:
+                  type: LPDDR5X
+                  width: 128
+                  depth: 262144
+
+            # PFU -- 1 per bank, in-DRAM filtering
+            - !Component
+              name: PFU
+              class: PIM_Filtering_Unit
+              attributes:
+                technology: 7nm
+                area_overhead_pct: 6.7
+                vector_width: 128
+                keys_per_epoch: 128
+                max_queries_per_batch: 16
+                instances: 1
+
+              subtree:
+              - !Component
+                name: PFU_SCF_Logic
+                class: PFU_SCF_Logic
+                attributes:
+                  vector_width: 128  # 128-bit XNOR + popcount
+                  technology: 7nm
+                  datawidth: 1
+                local:
+                - name: PFU_Compute
+                  class: PFU_SCF_Logic
+                  attributes:
+                    vector_width: 128
+                    datawidth: 1

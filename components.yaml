@@ -1,0 +1,145 @@
+# components.yaml -- Custom compound components for LongSight
+# PFU_SCF_Logic (7nm, in-DRAM), NMA_MAC and Top_K_Unit (16nm, near-memory)
+
+compound_components:
+  version: 0.4
+  classes:
+
+  # PFU: 128-bit XNOR + popcount for sign-concordance filtering
+  - name: PFU_SCF_Logic
+    attributes:
+      vector_width: 128
+      technology: 7nm
+      datawidth: 1
+    subcomponents:
+    - name: xnor_unit
+      class: xor_gate
+      attributes:
+        width: vector_width
+        technology: technology
+    - name: popcount_accumulator
+      class: popcount
+      attributes:
+        width: vector_width
+        technology: technology
+    - name: threshold_comparator
+      class: comparator
+      attributes:
+        width: 8               # popcount result fits in 8 bits
+        technology: technology
+    - name: bitmap_register
+      class: register
+      attributes:
+        width: 128             # 1 bit per key in epoch
+        technology: technology
+
+    actions:
+    - name: filter
+      subcomponents:
+      - name: xnor_unit
+        actions:
+        - name: compute
+          energy_scale: 1
+      - name: popcount_accumulator
+        actions:
+        - name: compute
+          energy_scale: 1
+      - name: threshold_comparator
+        actions:
+        - name: compare
+          energy_scale: 1
+      - name: bitmap_register
+        actions:
+        - name: write
+          energy_scale: 1
+
+    - name: read_bitmap
+      subcomponents:
+      - name: bitmap_register
+        actions:
+        - name: read
+          energy_scale: 1
+
+  # NMA MAC: BF16 dot-product scoring (Q·K over head_dim)
+  - name: NMA_MAC
+    attributes:
+      datawidth: 16
+      head_dim: 128
+      technology: 16nm
+    subcomponents:
+    - name: bf16_multiplier
+      class: fpmultiplier
+      attributes:
+        width: datawidth
+        technology: technology
+    - name: bf16_adder
+      class: fpadder
+      attributes:
+        width: 32              # FP32 accumulator
+        technology: technology
+
+    actions:
+    - name: compute
+      subcomponents:
+      - name: bf16_multiplier
+        actions:
+        - name: multiply
+          energy_scale: head_dim
+      - name: bf16_adder
+        actions:
+        - name: add
+          energy_scale: head_dim
+
+  # Top-K: insertion-based ranking of similarity scores
+  # 32-bit score + 32-bit key ID per entry, max 1024 entries
+  - name: Top_K_Unit
+    attributes:
+      max_k: 1024
+      score_width: 32
+      id_width: 32
+      technology: 16nm
+    subcomponents:
+    - name: score_comparator
+      class: comparator
+      attributes:
+        width: score_width
+        technology: technology
+    - name: score_register_file
+      class: register_file
+      attributes:
+        width: score_width + id_width
+        depth: max_k
+        technology: technology
+    - name: insertion_mux
+      class: mux
+      attributes:
+        width: score_width + id_width
+        num_inputs: 2
+        technology: technology
+
+    actions:
+    - name: rank
+      subcomponents:
+      - name: score_comparator
+        actions:
+        - name: compare
+          energy_scale: 1
+      - name: insertion_mux
+        actions:
+        - name: select
+          energy_scale: 1
+      - name: score_register_file
+        actions:
+        - name: write
+          energy_scale: 1
+
+    - name: sort
+      subcomponents:
+      - name: score_comparator
+        actions:
+        - name: compare
+          energy_scale: max_k * 10   # k * log2(k)
+      - name: score_register_file
+        actions:
+        - name: read
+          energy_scale: max_k
