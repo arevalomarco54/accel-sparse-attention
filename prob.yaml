@@ -1,39 +1,36 @@
-# prob.yaml -- LongSight decode-stage attention workloads
-# Llama-3-8B: 8 KV heads, head_dim=128, BF16
+# LongSight decode-stage workload in valid AccelForge schema.
 
 workload:
+  rank_sizes:
+    H: 8
+    W: 1024
+    D: 128
+    K: 128
+    K_s: 26214
+
+  bits_per_value: {All: 16}
+
   einsums:
-
-  # Dense QKT on GPU within sliding window (W=1024)
   - name: DenseQKT
-    rank_sizes: {H: 8, W: 1024, D: 128}
     tensor_accesses:
-    - {name: Query,      projection: [h, d],    bits_per_value: 16}
-    - {name: DenseKey,   projection: [h, w, d], bits_per_value: 16}
-    - {name: DenseScore, projection: [h, w],    bits_per_value: 16, output: True}
+    - {name: Query, projection: [h, d], bits_per_value: 16}
+    - {name: DenseKey, projection: [h, w, d], bits_per_value: 16}
+    - {name: DenseScore, projection: [h, w], bits_per_value: 16, output: True}
 
-  # Dense SV on GPU
   - name: DenseSV
-    rank_sizes: {H: 8, W: 1024, D: 128}
     tensor_accesses:
-    - {name: DenseScore,  projection: [h, w],    bits_per_value: 16}
-    - {name: DenseValue,  projection: [h, w, d], bits_per_value: 16}
-    - {name: DenseOutput, projection: [h, d],    bits_per_value: 16, output: True}
+    - {name: DenseScore, projection: [h, w], bits_per_value: 16}
+    - {name: DenseValue, projection: [h, w, d], bits_per_value: 16}
+    - {name: DenseOutput, projection: [h, d], bits_per_value: 16, output: True}
 
-  # Sign-concordance filtering on PFU (1-bit, 128 keys per epoch)
-  # Each 128-bit column read = 1 dimension across all 128 keys
   - name: SCF_Filter
-    rank_sizes: {K: 128, D: 128}
     tensor_accesses:
-    - {name: QuerySign,    projection: [d],    bits_per_value: 1}
-    - {name: KeySign,      projection: [k, d], bits_per_value: 1}
-    - {name: Concordance,  projection: [k],    bits_per_value: 8, output: True}
+    - {name: QuerySign, projection: [d], bits_per_value: 1}
+    - {name: KeySign, projection: [k, d], bits_per_value: 1}
+    - {name: Concordance, projection: [k], bits_per_value: 8, output: True}
 
-  # Sparse BF16 scoring on NMA (post-filter, 20x ratio)
-  # K_s = full context slice; density models the filtering sparsity
   - name: SparseScore
-    rank_sizes: {K_s: 131072, D: 128}
     tensor_accesses:
-    - {name: SparseQuery, projection: [d],      bits_per_value: 16}
-    - {name: FilteredKey, projection: [k_s, d], bits_per_value: 16, density: 0.05}
-    - {name: SimScore,    projection: [k_s],    bits_per_value: 32, output: True}
+    - {name: SparseQuery, projection: [d], bits_per_value: 16}
+    - {name: FilteredKey, projection: {K_s: k_s, D: d}, bits_per_value: 16}
+    - {name: SimScore, projection: {K_s: k_s}, bits_per_value: 32, output: True}

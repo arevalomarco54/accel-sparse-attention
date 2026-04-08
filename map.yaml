@@ -1,76 +1,44 @@
-# map.yaml -- LongSight mapping constraints
-# Pins each workload to its hardware target and enforces data placement
+# LoopTree mapping in valid AccelForge schema.
 
-mapping_constraints:
-  version: 0.4
+mapping:
+  nodes:
+  - !Sequential
+    nodes:
+    - !Nested
+      nodes:
+      - !Storage
+        component: HBM_Storage
+        tensors: [Query, DenseKey, DenseScore]
+      - !Compute
+        einsum: DenseQKT
+        component: SM_Compute
 
-  # === Dense attention on GPU ===
+    - !Nested
+      nodes:
+      - !Storage
+        component: HBM_Storage
+        tensors: [DenseScore, DenseValue, DenseOutput]
+      - !Compute
+        einsum: DenseSV
+        component: SM_Compute
 
-  - einsum: DenseQKT
-    constraints:
-    - target: SM_Compute
-      type: compute
-    - target: HBM_Storage
-      type: dataspace
-      keep: [Query, DenseKey, DenseScore]
+    - !Nested
+      nodes:
+      - !Storage
+        component: Bank_Storage
+        tensors: [QuerySign, KeySign, Concordance]
+      - !Compute
+        einsum: SCF_Filter
+        component: PFU_Compute
 
-  - einsum: DenseSV
-    constraints:
-    - target: SM_Compute
-      type: compute
-    - target: HBM_Storage
-      type: dataspace
-      keep: [DenseScore, DenseValue, DenseOutput]
-
-  # === SCF filtering on PFU ===
-
-  - einsum: SCF_Filter
-    constraints:
-    - target: PFU_Compute
-      type: compute
-
-    # KeySign lives in bank-local DRAM -- must not migrate upward
-    - target: Bank_Storage
-      type: dataspace
-      keep: [KeySign]
-      bypass: [QuerySign, Concordance]
-
-    # All 128 keys processed in parallel (matches 128-bit column read)
-    - target: PFU_Compute
-      type: spatial
-      factors: K=128
-
-    # Iterate over D=128 dimensions temporally (one column per cycle)
-    - target: PFU_Compute
-      type: temporal
-      factors: D=128
-      permutation: D
-
-  # === Sparse scoring on NMA ===
-
-  - einsum: SparseScore
-    constraints:
-    - target: NMA_MAC_Compute
-      type: compute
-
-    # Query pinned to NMA scratchpad (loaded once, reused across all keys)
-    - target: Query_SPM_Storage
-      type: dataspace
-      keep: [SparseQuery]
-      bypass: [FilteredKey, SimScore]
-
-    # Full-precision keys in bank DRAM, interleaved across 8 channels
-    - target: Bank_Storage
-      type: dataspace
-      keep: [FilteredKey]
-      bypass: [SparseQuery, SimScore]
-
-    - target: Channel
-      type: spatial
-      factors: D=8
-      split: true
-
-    # Dot product: iterate over D temporally at the MAC
-    - target: NMA_MAC_Compute
-      type: temporal
-      factors: D=128
+    - !Nested
+      nodes:
+      - !Storage
+        component: Query_SPM_Storage
+        tensors: [SparseQuery]
+      - !Storage
+        component: Bank_Storage
+        tensors: [FilteredKey, SimScore]
+      - !Compute
+        einsum: SparseScore
+        component: NMA_MAC_Compute
