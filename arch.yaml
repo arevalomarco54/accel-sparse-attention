@@ -1,10 +1,13 @@
-# LongSight-inspired architecture in valid AccelForge schema.
+# LongSight-inspired architecture approximating MICRO'25 (Quinn et al.)
+# while remaining compatible with AccelForge's core schemas.
 
 arch:
   nodes:
+  # GPU tier: 80 GB HBM3, dense attention over a local sliding window.
   - !Memory
     name: HBM_Storage
     size: 80 * 1024 * 1024 * 1024 * 8
+    total_latency: max(read_latency, write_latency)
     leak_power: 0
     area: 0
     actions:
@@ -12,7 +15,6 @@ arch:
     - {name: write, energy: 7.0e-12, latency: 1 / (16 * 3350e9)}
     tensors: {keep: Query | DenseKey | DenseScore | DenseValue | DenseOutput}
 
-  # Optional dense-attention branch on GPU SM compute.
   - !Fork
     nodes:
     - !Compute
@@ -23,31 +25,45 @@ arch:
       - {name: compute, energy: 0.10e-12, latency: 1 / 1.4e9}
       enabled: len(DenseKey) > 0 or len(DenseValue) > 0
 
-  # Main branch continues toward near-memory compute.
+  # CXL Type-3 attached memory-expander hierarchy (conceptual nodes).
+  - !Container
+    name: CXL_Type3_Link
+
+  - !Container
+    name: DReX_Controller_Complex
+
+  # DReX LPDDR5X organization from paper:
+  # 8 packages x 8 channels/package x 128 banks/channel = 8192 banks total.
+  # We model this parallelism via n_parallel_instances for runtime tractability.
   - !Memory
     name: Bank_Storage
-    size: 512 * 1024 * 1024 * 1024 * 8
+    n_parallel_instances: 8 * 8 * 128
+    size: (512 * 1024 * 1024 * 1024 * 8) / (8 * 8 * 128)
+    total_latency: max(read_latency, write_latency)
     leak_power: 0
     area: 0
     actions:
-    - {name: read, energy: 9.0e-12, latency: 1 / (16 * 136e9)}
-    - {name: write, energy: 9.0e-12, latency: 1 / (16 * 136e9)}
+    - {name: read, energy: 9.0e-12, latency: 150e-9 + (1 / (16 * 17.06e9))}
+    - {name: write, energy: 9.0e-12, latency: 150e-9 + (1 / (16 * 17.06e9))}
     tensors: {keep: QuerySign | KeySign | Concordance | FilteredKey | SimScore}
 
-  # Optional PFU branch for sign-concordance filtering.
+  # PFU sign-concordance filtering logic, one logical unit per bank.
   - !Fork
     nodes:
     - !Compute
       name: PFU_Compute
+      n_parallel_instances: 8 * 8 * 128
       leak_power: 0
       area: 5.0e-7
       actions:
       - {name: compute, energy: 0.02e-12, latency: 1 / 1.0e9}
       enabled: len(KeySign) > 0
 
+  # Near-memory accelerator side (one NMA per package).
   - !Memory
     name: Query_SPM_Storage
-    size: 256 * 128 * 16
+    n_parallel_instances: 8
+    size: 16 * 128 * 16
     leak_power: 0
     area: 1.0e-7
     actions:
@@ -55,8 +71,20 @@ arch:
     - {name: write, energy: 0.5e-12, latency: 1 / 1.0e9}
     tensors: {keep: SparseQuery}
 
+  - !Memory
+    name: Address_SPM_Storage
+    n_parallel_instances: 8
+    size: 1024 * 32
+    leak_power: 0
+    area: 1.0e-7
+    actions:
+    - {name: read, energy: 0.3e-12, latency: 1 / 1.0e9}
+    - {name: write, energy: 0.3e-12, latency: 1 / 1.0e9}
+    tensors: {keep: Nothing}
+
   - !Compute
     name: NMA_MAC_Compute
+    n_parallel_instances: 8
     leak_power: 0
     area: 8.0e-7
     actions:
