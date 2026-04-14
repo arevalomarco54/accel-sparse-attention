@@ -30,6 +30,11 @@ mapping:
       - !Storage
         component: Bank_Storage
         tensors: [QuerySign, KeySign, Concordance]
+      - !Spatial
+        name: Bank
+        component: PFU_Compute
+        rank_variable: k
+        tile_shape: 128
       - !Temporal
         rank_variable: d
         tile_shape: 1
@@ -48,6 +53,11 @@ mapping:
       - !Storage
         component: Bank_Storage
         tensors: [FilteredKey, SimScore]
+      - !Spatial
+        name: Pkg
+        component: NMA_MAC_Compute
+        rank_variable: k_s
+        tile_shape: 8
       - !Temporal
         rank_variable: d
         tile_shape: 1
