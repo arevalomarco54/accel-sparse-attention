@@ -25,8 +25,14 @@ mapping:
     - !Nested
       nodes:
       - !Storage
+        component: HBM_Storage
+        tensors: [DenseScore]
+      - !Storage
         component: Bank_Storage
         tensors: [QuerySign, KeySign, Concordance]
+      - !Temporal
+        rank_variable: d
+        tile_shape: 1
       - !Compute
         einsum: SCF_Filter
         component: PFU_Compute
@@ -34,11 +40,17 @@ mapping:
     - !Nested
       nodes:
       - !Storage
+        component: HBM_Storage
+        tensors: [DenseScore]
+      - !Storage
         component: Query_SPM_Storage
         tensors: [SparseQuery]
       - !Storage
         component: Bank_Storage
         tensors: [FilteredKey, SimScore]
+      - !Temporal
+        rank_variable: d
+        tile_shape: 1
       - !Compute
         einsum: SparseScore
         component: NMA_MAC_Compute

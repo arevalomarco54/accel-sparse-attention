@@ -25,12 +25,14 @@ workload:
 
   - name: SCF_Filter
     tensor_accesses:
+    - {name: DenseScore, projection: {H: "0", W: "0"}, bits_per_value: 16}
     - {name: QuerySign, projection: [d], bits_per_value: 1}
     - {name: KeySign, projection: [k, d], bits_per_value: 1}
     - {name: Concordance, projection: [k], bits_per_value: 8, output: True}
 
   - name: SparseScore
     tensor_accesses:
+    - {name: DenseScore, projection: {H: "0", W: "0"}, bits_per_value: 16}
     - {name: SparseQuery, projection: [d], bits_per_value: 16}
     - {name: FilteredKey, projection: {K_s: k_s, D: d}, bits_per_value: 16}
     - {name: SimScore, projection: {K_s: k_s}, bits_per_value: 32, output: True}
