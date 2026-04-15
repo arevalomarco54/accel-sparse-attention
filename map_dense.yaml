@@ -1,0 +1,23 @@
+# Dense-only LoopTree mapping.
+
+mapping:
+  nodes:
+  - !Sequential
+    nodes:
+    - !Nested
+      nodes:
+      - !Storage
+        component: HBM_Storage
+        tensors: [Query, DenseKey, DenseScore]
+      - !Compute
+        einsum: DenseQKT
+        component: SM_Compute
+
+    - !Nested
+      nodes:
+      - !Storage
+        component: HBM_Storage
+        tensors: [DenseScore, DenseValue, DenseOutput]
+      - !Compute
+        einsum: DenseSV
+        component: SM_Compute

@@ -1,0 +1,21 @@
+# Minimal traditional accelerator branch for example.yaml composition.
+arch:
+  nodes:
+  - !Memory
+    name: Trad_DRAM_Storage
+    size: 80 * 1024 * 1024 * 1024 * 8
+    total_latency: max(read_latency, write_latency)
+    leak_power: 0
+    area: 0
+    actions:
+    - {name: read, energy: 7.0e-12, latency: 1 / (16 * 3350e9)}
+    - {name: write, energy: 7.0e-12, latency: 1 / (16 * 3350e9)}
+    tensors: {keep: All}
+
+  - !Compute
+    name: Trad_TPU_Compute
+    leak_power: 0
+    area: 1.0e-6
+    actions:
+    - {name: compute, energy: 0.10e-12, latency: 1 / 1.4e9}
+    enabled: true

@@ -1,0 +1,54 @@
+# NOTE: All values in this file are placehodlers. You are expected to replace them with
+# reasonable values. Every value should come from a reliable source. Please read the
+# sources yourself; LLMs will hallucinate energy/area/latency/leak numbers VERY hard and
+# break all your experiments.
+
+# Parse this file with additional arguments:
+# - pim_accelerator_path=...
+# - traditional_accelerator_path=...
+
+# Then, if you have a jupyter cell that just has "spec.arch", you should see a tree with
+# both accelerators in there.
+
+arch:
+  nodes:
+  - !Memory
+    name: MainMemory
+
+    # Set these to reasonable values. They can be functions of the size as well.
+    size: 1e9
+    leak_power: size * 1e-12
+    area: size * 1e-12
+
+    # Keep All if you DO NOT want to fuse. Keep ~Intermediates if you want to fuse. For
+    # early experiments (Milestones 1 and 2), use keep All.
+    tensors: {keep: All}
+
+    # Set the read latency low. This is the access energy for accessing main memory for
+    # the PIM accelerator. The energy should be the access energy for sending from the
+    # main memory -> PIM accelerator.
+    actions:
+    - {name: read, energy: 1, latency: 0}
+    - {name: write, energy: 1, latency: 0}
+
+  - !Fork
+    nodes: {{include(pim_accelerator_path ~ '.yaml', 'arch.nodes')}}
+
+  # This is where you charge for the energy and bandwidth limitations of transferring
+  # data between the main memory and the traditional accelerator. It's an off-chip link.
+  # Latency should be much higher than the main memory latency. I don't know about
+  # energy (how much energy is spent accessing the DRAM directly versus transferring it
+  # over the link).
+  - !Toll
+    name: OffChipLink
+    direction: up_and_down
+    leak_power: 0
+    area: 0
+    tensors: {keep: All}
+    # Read action is used both for transfers main memory -> traditional accelerator and
+    # traditional accelerator -> main memory.
+    actions: [{name: read, energy: 1, latency: 0}]
+
+  # Hot accelerator. We can power gate this accelerator if it's not being used.
+  - !Fork
+    nodes: {{include(traditional_accelerator_path ~ '.yaml', 'arch.nodes')}}

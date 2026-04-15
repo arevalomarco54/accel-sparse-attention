@@ -1,0 +1,22 @@
+# Dense-only attention workload for benchmarking.
+
+workload:
+  rank_sizes:
+    H: 8
+    W: 1024
+    D: 128
+
+  bits_per_value: {All: 16}
+
+  einsums:
+  - name: DenseQKT
+    tensor_accesses:
+    - {name: Query, projection: [h, d], bits_per_value: 16}
+    - {name: DenseKey, projection: [h, w, d], bits_per_value: 16}
+    - {name: DenseScore, projection: [h, w], bits_per_value: 16, output: True}
+
+  - name: DenseSV
+    tensor_accesses:
+    - {name: DenseScore, projection: [h, w], bits_per_value: 16}
+    - {name: DenseValue, projection: [h, w, d], bits_per_value: 16}
+    - {name: DenseOutput, projection: [h, d], bits_per_value: 16, output: True}
