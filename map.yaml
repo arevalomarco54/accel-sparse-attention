@@ -1,66 +1,70 @@
-# LoopTree mapping in valid AccelForge schema.
-
 mapping:
   nodes:
-  - !Sequential
+  - !Pipeline
     nodes:
-    - !Nested
+    # Dense branch on GPU/HBM path.
+    - !Sequential
       nodes:
-      - !Storage
-        component: HBM_Storage
-        tensors: [Query, DenseKey, DenseScore]
-      - !Compute
-        einsum: DenseQKT
-        component: SM_Compute
+      - !Nested
+        nodes:
+        - !Storage
+          component: HBM_Storage
+          tensors: [Query, DenseKey, DenseScore]
+        - !Compute
+          einsum: DenseQKT
+          component: SM_Compute
 
-    - !Nested
-      nodes:
-      - !Storage
-        component: HBM_Storage
-        tensors: [DenseScore, DenseValue, DenseOutput]
-      - !Compute
-        einsum: DenseSV
-        component: SM_Compute
+      - !Nested
+        nodes:
+        - !Storage
+          component: HBM_Storage
+          tensors: [DenseScore, DenseValue, DenseOutput]
+        - !Compute
+          einsum: DenseSV
+          component: SM_Compute
 
-    - !Nested
+    # Sparse branch on PFU/NMA path.
+    - !Sequential
       nodes:
-      - !Storage
-        component: HBM_Storage
-        tensors: [DenseScore]
-      - !Storage
-        component: Bank_Storage
-        tensors: [QuerySign, KeySign, Concordance]
-      - !Spatial
-        name: Bank
-        component: PFU_Compute
-        rank_variable: k
-        tile_shape: 128
-      - !Temporal
-        rank_variable: d
-        tile_shape: 1
-      - !Compute
-        einsum: SCF_Filter
-        component: PFU_Compute
+      - !Nested
+        nodes:
+        - !Storage
+          component: HBM_Storage
+          tensors: [DenseScore]
+        - !Storage
+          component: Bank_Storage
+          tensors: [QuerySign, KeySign, Concordance]
+        - !Spatial
+          name: Bank
+          component: PFU_Compute
+          rank_variable: k
+          tile_shape: 128
+        - !Temporal
+          rank_variable: d
+          tile_shape: 1
+        - !Compute
+          einsum: SCF_Filter
+          component: PFU_Compute
 
-    - !Nested
-      nodes:
-      - !Storage
-        component: HBM_Storage
-        tensors: [DenseScore]
-      - !Storage
-        component: Query_SPM_Storage
-        tensors: [SparseQuery]
-      - !Storage
-        component: Bank_Storage
-        tensors: [FilteredKey, SimScore]
-      - !Spatial
-        name: Pkg
-        component: NMA_MAC_Compute
-        rank_variable: k_s
-        tile_shape: 8
-      - !Temporal
-        rank_variable: d
-        tile_shape: 1
-      - !Compute
-        einsum: SparseScore
-        component: NMA_MAC_Compute
+      - !Nested
+        nodes:
+        - !Storage
+          component: HBM_Storage
+          tensors: [DenseScore]
+        - !Storage
+          component: Query_SPM_Storage
+          tensors: [SparseQuery]
+        - !Storage
+          component: Bank_Storage
+          tensors: [FilteredKey, SimScore]
+        - !Spatial
+          name: Pkg
+          component: NMA_MAC_Compute
+          rank_variable: k_s
+          tile_shape: 8
+        - !Temporal
+          rank_variable: d
+          tile_shape: 1
+        - !Compute
+          einsum: SparseScore
+          component: NMA_MAC_Compute

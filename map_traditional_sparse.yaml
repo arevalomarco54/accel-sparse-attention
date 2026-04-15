@@ -1,0 +1,54 @@
+# Traditional-arch mapping for the hybrid sparse-capable workload.
+# All einsums execute on traditional compute and DRAM-backed storage.
+
+mapping:
+  nodes:
+  - !Sequential
+    nodes:
+    - !Nested
+      nodes:
+      - !Storage
+        component: Trad_DRAM_Storage
+        tensors: [Query, DenseKey, DenseScore]
+      - !Compute
+        einsum: DenseQKT
+        component: Trad_TPU_Compute
+
+    - !Nested
+      nodes:
+      - !Storage
+        component: Trad_DRAM_Storage
+        tensors: [DenseScore, DenseValue, DenseOutput]
+      - !Compute
+        einsum: DenseSV
+        component: Trad_TPU_Compute
+
+    - !Nested
+      nodes:
+      - !Storage
+        component: Trad_DRAM_Storage
+        tensors: [DenseScore, QuerySign, KeySign, Concordance]
+      - !Temporal
+        rank_variable: k
+        tile_shape: 128
+      - !Temporal
+        rank_variable: d
+        tile_shape: 1
+      - !Compute
+        einsum: SCF_Filter
+        component: Trad_TPU_Compute
+
+    - !Nested
+      nodes:
+      - !Storage
+        component: Trad_DRAM_Storage
+        tensors: [DenseScore, SparseQuery, FilteredKey, SimScore]
+      - !Temporal
+        rank_variable: k_s
+        tile_shape: 128
+      - !Temporal
+        rank_variable: d
+        tile_shape: 1
+      - !Compute
+        einsum: SparseScore
+        component: Trad_TPU_Compute

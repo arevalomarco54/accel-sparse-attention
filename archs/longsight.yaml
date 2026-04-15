@@ -1,9 +1,16 @@
-# LongSight-inspired architecture approximating MICRO'25 (Quinn et al.)
-# while remaining compatible with AccelForge's core schemas.
+# LongSight architecture modeled after MICRO'25 Section 7.
+# Key paper-aligned points represented here:
+# - GPU dense window path in HBM/SM.
+# - CXL-attached DReX path for sparse offload.
+# - DReX organization: 8 packages x 8 channels x 128 banks.
+# - PFUs near banks (filtering) and one NMA lane per package
+#   (scoring + top-k orchestration).
+#
+# Note: This remains an abstraction for AccelForge mapping experiments.
 
 arch:
   nodes:
-  # GPU tier: 80 GB HBM3, dense attention over a local sliding window.
+  # GPU tier: dense-window attention over local HBM.
   - !Memory
     name: HBM_Storage
     size: 80 * 1024 * 1024 * 1024 * 8
@@ -29,16 +36,23 @@ arch:
   - !Container
     name: CXL_Type3_Link
 
+  # DCC orchestrates sparse request descriptors and completion polling.
   - !Container
     name: DReX_Controller_Complex
 
-  # 8 LPDDR5X packages in DReX.
+  - !Container
+    name: DCC_Request_Queue
+
+  - !Container
+    name: DCC_Response_Buffer_Table
+
+  # 8 LPDDR5X packages in DReX. All downstream DReX resources inherit Pkg.
   - !Container
     name: DReX_Package_Array
     spatial:
     - {name: Pkg, fanout: 8, may_reuse: Nothing}
 
-  # Package-level storage viewed by both PFU and NMA paths.
+  # Package-level LPDDR storage used by PFU filtering and NMA sparse stages.
   - !Memory
     name: Bank_Storage
     size: (512 * 1024 * 1024 * 1024 * 8) / 8
@@ -50,7 +64,8 @@ arch:
     - {name: write, energy: 9.0e-12, latency: 150e-9 + (1 / (16 * 17.06e9))}
     tensors: {keep: QuerySign | KeySign | Concordance | FilteredKey | SimScore}
 
-  # PFU sign-concordance filtering path: per package x channel x bank.
+  # PFU sign-concordance filtering path: per package x channel x bank
+  # (8 x 8 x 128 PFUs in the paper model).
   - !Fork
     nodes:
     - !Container
@@ -67,7 +82,8 @@ arch:
       - {name: compute, energy: 0.02e-12, latency: 1 / 1.0e9}
       enabled: len(KeySign) > 0
 
-  # NMA path: one NMA lane per package (inherits only Pkg fanout).
+  # NMA path: one NMA lane per package (inherits Pkg fanout only).
+  # Query scratchpad models up-to-16-query groups discussed in Section 7.
   - !Memory
     name: Query_SPM_Storage
     size: 16 * 128 * 16
@@ -78,6 +94,7 @@ arch:
     - {name: write, energy: 0.5e-12, latency: 1 / 1.0e9}
     tensors: {keep: SparseQuery}
 
+  # Address scratchpad models NMA bookkeeping for top-k candidates.
   - !Memory
     name: Address_SPM_Storage
     size: 1024 * 32
@@ -87,6 +104,9 @@ arch:
     - {name: read, energy: 0.3e-12, latency: 1 / 1.0e9}
     - {name: write, energy: 0.3e-12, latency: 1 / 1.0e9}
     tensors: {keep: Nothing}
+
+  - !Container
+    name: NMA_Controller_Logic
 
   - !Compute
     name: NMA_MAC_Compute
