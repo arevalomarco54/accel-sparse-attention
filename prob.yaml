@@ -5,7 +5,7 @@ workload:
     H: 8
     W: 1024
     D: 128
-    K: 128
+    K: 131072
     K_s: 26214
 
   bits_per_value: {All: 16}
