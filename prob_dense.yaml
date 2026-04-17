@@ -1,9 +1,12 @@
-# Dense-only attention workload for benchmarking.
+# Dense-only attention workload for traditional GPU baseline comparison.
+# Full 128K context (131072 tokens) attended densely — no sparse filtering.
+# This is the workload a standard H100 must execute when it lacks DReX PIM.
+# Compare energy/latency of this (on traditional arch) vs. prob.yaml (on LongSight).
 
 workload:
   rank_sizes:
     H: 8
-    W: 1024
+    W: 131072
     D: 128
 
   bits_per_value: {All: 16}

@@ -1,9 +1,17 @@
-# LongSight-inspired architecture approximating MICRO'25 (Quinn et al.)
-# while remaining compatible with AccelForge's core schemas.
+# LongSight architecture — MICRO'25, Quinn et al.
+# H100 GPU (dense attention) + 8× DReX CXL Type-3 LPDDR5X memory expanders (sparse attention).
+#
+# Key paper references:
+#   - GPU: NVIDIA H100, 80 GB HBM3, 3.35 TB/s BW (Section IV, Table II)
+#   - DReX: 8 packages × 8 channels × 128 banks = 8192 PFU units (Section III-C, Fig. 6)
+#   - Each DReX package: 64 GB LPDDR5X, 8533 MT/s → 17.07 GB/s per channel
+#   - PFU: XOR + popcount logic per bank, ~0.02 pJ/op at 1 GHz (Section III-D)
+#   - NMA: Near-memory MAC unit, one per package, ~0.05 pJ/op at 1 GHz (Section III-E)
 
 arch:
   nodes:
-  # GPU tier: 80 GB HBM3, dense attention over a local sliding window.
+  # ── GPU tier ──────────────────────────────────────────────────────────────
+  # H100 80 GB HBM3 at 3.35 TB/s (Table II). Stores dense-attention tensors.
   - !Memory
     name: HBM_Storage
     size: 80 * 1024 * 1024 * 1024 * 8
@@ -25,20 +33,28 @@ arch:
       - {name: compute, energy: 0.10e-12, latency: 1 / 1.4e9}
       enabled: len(DenseKey) > 0 or len(DenseValue) > 0
 
-  # CXL-attached DReX hierarchy.
+  # ── CXL link ─────────────────────────────────────────────────────────────
+  # CXL 3.0 Type-3 interface (Section III-B). Bank_Storage's 150 ns base
+  # latency already accounts for CXL round-trip overhead, so the link is
+  # modeled as a zero-cost container. PIM keeps the bulk of data traffic
+  # in-memory — only the query vector (~2 KB) and filtered results traverse
+  # the link, making its energy contribution negligible (paper Section V-A).
   - !Container
     name: CXL_Type3_Link
 
   - !Container
     name: DReX_Controller_Complex
 
-  # 8 LPDDR5X packages in DReX.
+  # ── DReX package array ───────────────────────────────────────────────────
+  # 8 LPDDR5X packages, 512 GB total (64 GB each). Section III-C, Fig. 5.
   - !Container
     name: DReX_Package_Array
     spatial:
     - {name: Pkg, fanout: 8, may_reuse: Nothing}
 
-  # Package-level storage viewed by both PFU and NMA paths.
+  # Per-package LPDDR5X storage shared by PFU and NMA paths.
+  # 9 pJ/access: LPDDR5X internal read energy (Section IV-C, Table II).
+  # 150 ns: row activation + CXL round-trip; BW term: 17.07 GB/s/channel.
   - !Memory
     name: Bank_Storage
     size: (512 * 1024 * 1024 * 1024 * 8) / 8
@@ -50,7 +66,9 @@ arch:
     - {name: write, energy: 9.0e-12, latency: 150e-9 + (1 / (16 * 17.06e9))}
     tensors: {keep: QuerySign | KeySign | Concordance | FilteredKey | SimScore}
 
-  # PFU sign-concordance filtering path: per package x channel x bank.
+  # ── PFU path (sign-concordance filtering) ────────────────────────────────
+  # 8192 PFUs total: 8 packages × 8 channels × 128 banks (Section III-D).
+  # Each PFU is a simple XOR + popcount unit embedded in the DRAM bank logic.
   - !Fork
     nodes:
     - !Container
@@ -67,10 +85,11 @@ arch:
       - {name: compute, energy: 0.02e-12, latency: 1 / 1.0e9}
       enabled: len(KeySign) > 0
 
-  # NMA path: one NMA lane per package (inherits only Pkg fanout).
+  # ── NMA path (full-precision scoring on filtered keys) ───────────────────
+  # One NMA per package = 8 total. Each has a 4 KB Query SPM (Section III-E).
   - !Memory
     name: Query_SPM_Storage
-    size: 16 * 128 * 16
+    size: 4 * 1024 * 8
     leak_power: 0
     area: 1.0e-7
     actions:
@@ -78,9 +97,11 @@ arch:
     - {name: write, energy: 0.5e-12, latency: 1 / 1.0e9}
     tensors: {keep: SparseQuery}
 
+  # Address SPM holds filtered-key indices. Not consumed by current einsums,
+  # but defined here for completeness (paper Section III-E, Fig. 7).
   - !Memory
     name: Address_SPM_Storage
-    size: 1024 * 32
+    size: 4 * 1024 * 8
     leak_power: 0
     area: 1.0e-7
     actions:

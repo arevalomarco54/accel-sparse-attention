@@ -1,9 +1,15 @@
-# LoopTree mapping in valid AccelForge schema.
+# LongSight LoopTree mapping for the hybrid dense+sparse attention workload.
+# Maps 4 einsums sequentially: DenseQKT → DenseSV (GPU), SCF_Filter (PFU), SparseScore (NMA).
+#
+# NOTE: !Sequential models worst-case latency. The paper pipelines GPU dense
+# attention with DReX sparse attention (Section IV-A), so real latency is lower.
+# Energy accounting remains correct regardless.
 
 mapping:
   nodes:
   - !Sequential
     nodes:
+    # ── Dense Q·K^T on GPU ─────────────────────────────────────────────────
     - !Nested
       nodes:
       - !Storage
@@ -13,6 +19,7 @@ mapping:
         einsum: DenseQKT
         component: SM_Compute
 
+    # ── Dense Score·V on GPU ───────────────────────────────────────────────
     - !Nested
       nodes:
       - !Storage
@@ -22,6 +29,9 @@ mapping:
         einsum: DenseSV
         component: SM_Compute
 
+    # ── Sign-concordance filtering on PFUs ─────────────────────────────────
+    # Distributes K=130048 remote keys across 128 banks (tile=128).
+    # Each bank's PFU XOR+popcounts one key per cycle across D=128 dimensions.
     - !Nested
       nodes:
       - !Storage
@@ -42,6 +52,9 @@ mapping:
         einsum: SCF_Filter
         component: PFU_Compute
 
+    # ── Full-precision scoring on NMAs ─────────────────────────────────────
+    # K_s=6504 filtered keys distributed across 8 NMAs (one per package).
+    # Each NMA processes ~813 keys, doing D=128 MACs per key.
     - !Nested
       nodes:
       - !Storage

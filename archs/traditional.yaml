@@ -1,4 +1,15 @@
-# Minimal traditional accelerator branch for example.yaml composition.
+# Traditional GPU baseline — models an H100-class accelerator doing full dense
+# attention over the entire context, without DReX PIM assistance.
+#
+# HBM specs match longsight.yaml's GPU tier (same hardware, same cost model):
+#   - 80 GB HBM3, 3.35 TB/s, 7 pJ/access (Table II, Quinn et al. MICRO'25)
+#   - Compute: 0.10 pJ/op at 1.4 GHz (matching SM_Compute)
+#
+# Simplification: no on-chip L2 cache or shared memory is modeled. All data
+# comes from DRAM on every access. This overestimates memory energy for the
+# traditional baseline, making the comparison conservative (favorable to
+# traditional). A real H100 would benefit from 50 MB L2 and SM shared memory.
+
 arch:
   nodes:
   - !Memory

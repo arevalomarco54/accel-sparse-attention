@@ -1,4 +1,5 @@
-# Dense-only LoopTree mapping.
+# Traditional GPU mapping for full dense attention over the entire context.
+# Pairs with: archs/traditional.yaml + prob_dense.yaml
 
 mapping:
   nodes:
@@ -7,17 +8,17 @@ mapping:
     - !Nested
       nodes:
       - !Storage
-        component: HBM_Storage
+        component: Trad_DRAM_Storage
         tensors: [Query, DenseKey, DenseScore]
       - !Compute
         einsum: DenseQKT
-        component: SM_Compute
+        component: Trad_TPU_Compute
 
     - !Nested
       nodes:
       - !Storage
-        component: HBM_Storage
+        component: Trad_DRAM_Storage
         tensors: [DenseScore, DenseValue, DenseOutput]
       - !Compute
         einsum: DenseSV
-        component: SM_Compute
+        component: Trad_TPU_Compute

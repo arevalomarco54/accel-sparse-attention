@@ -1,12 +1,18 @@
-# LongSight decode-stage workload in valid AccelForge schema.
+# LongSight decode-stage workload (hybrid dense+sparse attention).
+# Models a single decode step at 128K context length (131072 tokens).
+# Paper: Quinn et al., "LongSight," MICRO'25.
+#
+# Dense attention covers a local sliding window of W=1024 tokens (GPU/HBM).
+# Sparse attention covers the remaining K=131072-1024=130048 remote tokens (DReX PIM).
+# After sign-concordance filtering at ~20x ratio (Section V-B), K_s≈6504 keys survive.
 
 workload:
   rank_sizes:
     H: 8
     W: 1024
     D: 128
-    K: 128
-    K_s: 26214
+    K: 130048
+    K_s: 6504
 
   bits_per_value: {All: 16}
 
