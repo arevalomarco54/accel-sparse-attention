@@ -35,15 +35,10 @@ arch:
 
   # ── CXL link ─────────────────────────────────────────────────────────────
   # CXL 3.0 Type-3 interface (Section III-B). Bank_Storage's 150 ns base
-  # latency already accounts for CXL round-trip overhead, so the link is
-  # modeled as a zero-cost container. PIM keeps the bulk of data traffic
-  # in-memory — only the query vector (~2 KB) and filtered results traverse
-  # the link, making its energy contribution negligible (paper Section V-A).
-  - !Container
-    name: CXL_Type3_Link
-
-  - !Container
-    name: DReX_Controller_Complex
+  # latency already accounts for CXL round-trip overhead. PIM keeps the bulk
+  # of data traffic in-memory — only the query vector (~2 KB) and filtered
+  # results traverse the link, making its energy contribution negligible
+  # (paper Section V-A). No explicit toll is charged here.
 
   # ── DReX package array ───────────────────────────────────────────────────
   # 8 LPDDR5X packages, 512 GB total (64 GB each). Section III-C, Fig. 5.
@@ -54,7 +49,10 @@ arch:
 
   # Per-package LPDDR5X storage shared by PFU and NMA paths.
   # 9 pJ/access: LPDDR5X internal read energy (Section IV-C, Table II).
-  # 150 ns: row activation + CXL round-trip; BW term: 17.07 GB/s/channel.
+  # Latency: bandwidth-limited only (17.07 GB/s per channel). PIM ops stream
+  # from the row buffer — data never crosses CXL. LPDDR5X row activation
+  # (~20 ns tRCD) is amortized across ~1024 values per row and is negligible
+  # per-access. (Paper Section III-D: PFUs operate at row-buffer speed.)
   - !Memory
     name: Bank_Storage
     size: (512 * 1024 * 1024 * 1024 * 8) / 8
@@ -62,8 +60,8 @@ arch:
     leak_power: 0
     area: 0
     actions:
-    - {name: read, energy: 9.0e-12, latency: 150e-9 + (1 / (16 * 17.06e9))}
-    - {name: write, energy: 9.0e-12, latency: 150e-9 + (1 / (16 * 17.06e9))}
+    - {name: read, energy: 9.0e-12, latency: 1 / (16 * 17.06e9)}
+    - {name: write, energy: 9.0e-12, latency: 1 / (16 * 17.06e9)}
     tensors: {keep: QuerySign | KeySign | Concordance | FilteredKey | SimScore}
 
   # ── PFU path (sign-concordance filtering) ────────────────────────────────

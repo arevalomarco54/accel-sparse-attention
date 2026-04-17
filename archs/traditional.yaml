@@ -1,14 +1,14 @@
-# Traditional GPU baseline — models an H100-class accelerator doing full dense
-# attention over the entire context, without DReX PIM assistance.
+# Traditional GPU baseline — H100-class accelerator doing full dense attention.
 #
-# HBM specs match longsight.yaml's GPU tier (same hardware, same cost model):
-#   - 80 GB HBM3, 3.35 TB/s, 7 pJ/access (Table II, Quinn et al. MICRO'25)
-#   - Compute: 0.10 pJ/op at 1.4 GHz (matching SM_Compute)
+# Sources:
+#   - 80 GB HBM3, 3.35 TB/s BW, ~7 pJ/access (NVIDIA H100 whitepaper; Table II)
+#   - 50 MB L2 cache, ~6 TB/s internal BW (H100 whitepaper: "over 12 TB/s" aggregate,
+#     we use 6 TB/s conservatively). Energy: ~1 pJ/access (5 nm SRAM estimate).
+#   - Compute: 0.10 pJ/op at 1.4 GHz (matching SM_Compute in longsight.yaml)
 #
-# Simplification: no on-chip L2 cache or shared memory is modeled. All data
-# comes from DRAM on every access. This overestimates memory energy for the
-# traditional baseline, making the comparison conservative (favorable to
-# traditional). A real H100 would benefit from 50 MB L2 and SM shared memory.
+# The L2 cache enables significant data reuse during tiled dense attention:
+# Query vectors, partial scores, and tiled Key/Value blocks are cached,
+# reducing expensive HBM round-trips.
 
 arch:
   nodes:
@@ -21,6 +21,17 @@ arch:
     actions:
     - {name: read, energy: 7.0e-12, latency: 1 / (16 * 3350e9)}
     - {name: write, energy: 7.0e-12, latency: 1 / (16 * 3350e9)}
+    tensors: {keep: All}
+
+  - !Memory
+    name: Trad_L2_Cache
+    size: 50 * 1024 * 1024 * 8
+    total_latency: max(read_latency, write_latency)
+    leak_power: 0
+    area: 0
+    actions:
+    - {name: read, energy: 1.0e-12, latency: 1 / (16 * 6000e9)}
+    - {name: write, energy: 1.0e-12, latency: 1 / (16 * 6000e9)}
     tensors: {keep: All}
 
   - !Compute

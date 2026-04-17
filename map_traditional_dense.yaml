@@ -1,5 +1,8 @@
 # Traditional GPU mapping for full dense attention over the entire context.
 # Pairs with: archs/traditional.yaml + prob_dense.yaml
+#
+# Two-level memory hierarchy: DRAM (backing store) → L2 cache (working set).
+# AccelForge tiles data through L2 automatically based on cache size.
 
 mapping:
   nodes:
@@ -10,6 +13,9 @@ mapping:
       - !Storage
         component: Trad_DRAM_Storage
         tensors: [Query, DenseKey, DenseScore]
+      - !Storage
+        component: Trad_L2_Cache
+        tensors: [Query, DenseKey, DenseScore]
       - !Compute
         einsum: DenseQKT
         component: Trad_TPU_Compute
@@ -18,6 +24,9 @@ mapping:
       nodes:
       - !Storage
         component: Trad_DRAM_Storage
+        tensors: [DenseScore, DenseValue, DenseOutput]
+      - !Storage
+        component: Trad_L2_Cache
         tensors: [DenseScore, DenseValue, DenseOutput]
       - !Compute
         einsum: DenseSV
