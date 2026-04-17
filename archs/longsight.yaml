@@ -62,7 +62,7 @@ arch:
     actions:
     - {name: read, energy: 9.0e-12, latency: 1 / (16 * 17.06e9)}
     - {name: write, energy: 9.0e-12, latency: 1 / (16 * 17.06e9)}
-    tensors: {keep: QuerySign | KeySign | Concordance | FilteredKey | SimScore}
+    tensors: {keep: QuerySign | KeySign | Concordance | FilteredKey | SimScore | FilteredValue | SparseOutput}
 
   # ── PFU path (sign-concordance filtering) ────────────────────────────────
   # 8192 PFUs total: 8 packages × 8 channels × 128 banks (Section III-D).
@@ -113,4 +113,4 @@ arch:
     area: 8.0e-7
     actions:
     - {name: compute, energy: 0.05e-12, latency: 1 / 1.0e9}
-    enabled: len(SparseQuery) > 0
+    enabled: len(SparseQuery) > 0 or len(SimScore) > 0

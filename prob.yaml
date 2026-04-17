@@ -42,3 +42,10 @@ workload:
     - {name: SparseQuery, projection: [d], bits_per_value: 16}
     - {name: FilteredKey, projection: {K_s: k_s, D: d}, bits_per_value: 16}
     - {name: SimScore, projection: {K_s: k_s}, bits_per_value: 32, output: True}
+
+  - name: HybridSV
+    tensor_accesses:
+    - {name: DenseScore, projection: {H: "0", W: "0"}, bits_per_value: 16}
+    - {name: SimScore, projection: {K_s: k_s}, bits_per_value: 32}
+    - {name: FilteredValue, projection: {K_s: k_s, D: d}, bits_per_value: 16}
+    - {name: SparseOutput, projection: [d], bits_per_value: 16, output: True}

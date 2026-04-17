@@ -77,3 +77,18 @@ mapping:
       - !Compute
         einsum: SparseScore
         component: NMA_MAC_Compute
+
+    # ── Sparse Score×Value on NMAs ─────────────────────────────────────────
+    # Analogous to DenseSV: weights FilteredValue by SimScore to produce
+    # the sparse attention output. K_s × D = 6504 × 128 MACs per head.
+    - !Nested
+      nodes:
+      - !Storage
+        component: HBM_Storage
+        tensors: [DenseScore]
+      - !Storage
+        component: Bank_Storage
+        tensors: [SimScore, FilteredValue, SparseOutput]
+      - !Compute
+        einsum: HybridSV
+        component: NMA_MAC_Compute
